@@ -1,0 +1,95 @@
+' For CR1000X + VOLT116 with IRGASON + EC100
+
+' User defined constants, can be modified on the logger easily
+ConstTable(Const_Table)
+    ' TODO UPDATE WITH WIRING INFO
+
+    ' Program function constants
+    Const FAST_INTV = 50  ' ms, scan interval for high frequency instruments
+    Const SLOW_INTV = 5  ' min, scan interval for general met sensors
+    Const AVG_INTV = 30  ' min, averaging interval for output statistics
+    
+    ' Peripherals
+    Const SN_VOLT116 = 99999
+    Const CPI_VOLT116_ADR As Long = 1
+    Const CPI_DEVICE As String = "VOLT116"
+
+    ' IRGASON
+    Const SN_IRGASON = 9999
+    Const SDM_CLK_SPEED = 30  ' us
+    Const EC100_SDM_ADR = 1
+
+    'Temp/RH Probe
+    Const SN_TRH = 9999
+
+    ' Quantum sensor
+    Const SN_PAR = 9999
+
+    ' Wind
+    Const SN_WIND = 9999
+
+    ' Soil probes
+    ' will probably be stored in an array or something
+
+    ' Soil heat flux
+    ' will probably be stored in an array or something
+
+EndConstTable
+
+
+' Defining meteorologic variables
+Public rho_CO2; Units rho_CO2 = mg m-3
+
+Public rho_H2O; Units rho_H2O = g m-3
+
+Public PA; Units PA = kPa
+Public RH; Units RH = %
+Public T_SONIC; Units T_SONIC = degC
+Public TA; Units TA = degC
+
+Public D_SNOW; Units D_SNOW = cm
+Public P_RAIN; Units P_RAIN = mm
+Public P_SNOW; Units P_SNOW = mm
+
+Public LW_IN; Units LW_IN = W m-2
+Public LW_OUT; Units LW_OUT = W m-2
+Public SW_IN; Units SW_IN = W m-2
+Public SW_OUT; Units SW_OUT = W m-2
+
+Public PPFD_IN; Units PPFD_IN = umol m-2 s-1
+Public PPFD_OUT; Units PPFD_OUT = umol m-2 s-1
+
+Public SWC; Units SWC = %
+Public TS; Units TS = degC
+
+Public WD; Units WD = deg
+Public WS; Units WS = m s-1
+Public U; Units U = m s-1
+Public V; Units V = m s-1
+Public W; Units W = m s-1
+
+' Defining public intermediate variables for debugging
+' things like instrument voltages etc.
+Public BattV; Units BattV = V
+Public T_panel; Units T_panel = degC
+
+' Raw outputs from the sensors for debugging
+DataTable(Raw_5min, TRUE, -1)
+EndTable
+
+' 30 minute averaged meteorologic data
+DataTable(Met_30min, TRUE, -1)
+    ' Things to do/consider
+    ' Use the Ameriflux data variable table as a reference to see which statistics, etc we need
+    ' Consider reporting PPM as well as density for our gasses, which is easier to interpret
+    ' Consider adding a disablevar field to filter out bad data
+    ' Remember to use circular statistics for wind direction where imnportant
+EndTable
+
+' High frequency data from IRGASON
+DataTable(Fast_50ms, TRUE, -1)
+    ' we will need
+    '   * Data: U, V, W, T_SONIC, rho_CO2, rho_H2O
+    '   * Diagnostics: diag_Sonic, diag_IRGA, signal_CO2, signal_H2O
+    '   * Other ancillary data: IRGASON TA, PA, CO2 density from fast-response temp???
+EndTable
