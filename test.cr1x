@@ -1,95 +1,224 @@
 ' For CR1000X + VOLT116 with IRGASON + EC100
 
+' Equipment to be used
+
+' Datalogger:
+'     CR1000X
+'     VOLT116
+' Flux: 
+'     IRGASON + EC100 (SDM)
+' Radiation
+'     PAR: Apogee SQ610 (analog)
+'     Rnet: Kipp & Zonen CNR4 (analog)
+' Met:
+'     Temp/RH: CS Hygrovue 10 (SDI12) + Apogee TS100 aspirated shield
+'     Pressure: CS Barovue 10 (SDI12)
+'     Wind: RM Young 05103 (analog)
+'     Precip: ???
+'     Rain/Snow: radar rain gauge????
+' Soil:
+'     Soil Moisture: Stevens Hydraprobe x???
+'     Soil Heat Flux: ???
+
+
+PipeLineMode
+AngleDegrees
+PreserveVariables
+
 ' User defined constants, can be modified on the logger easily
 ConstTable(Const_Table)
-    ' TODO UPDATE WITH WIRING INFO
-
     ' Program function constants
     Const FAST_INTV = 50  ' ms, scan interval for high frequency instruments
-    Const SLOW_INTV = 5  ' min, scan interval for general met sensors
-    Const AVG_INTV = 30  ' min, averaging interval for output statistics
-    
-    ' Peripherals
-    Const SN_VOLT116 = 99999
-    Const CPI_VOLT116_ADR As Long = 1
-    Const CPI_DEVICE As String = "VOLT116"
+    Const FAST_FREQ = 1000 INTDV FAST_INTV  ' Hz, frequency for high frequency instruments
+    Const FAST_SCAN_BUFFER_SIZE = 60 * (1000 INTDV FAST_INTV)  ' 60 second scan buffer
+    Const NDAYS_FAST_CRD = 1  ' Number of days to store in the fast data CRD file
+
+    Const SLOW_INTV = 1  ' min
+    Const NDAYS_SLOW_CRD = 7
+
+    Const STATS_INTV = 30  ' min, interval to store slow data
+    Const NDAYS_STATS_CPU = 7  ' Number of days of slow data to store on the CPU
+    Const STATS_TABLE_SIZE = Ceiling((NDAYS_STATS_CPU*1440/STATS_INTV))  ' number of records
+    Const NDAYS_STATS_CRD = 30  ' Number of days to store in the slow data CRD file
 
     ' IRGASON
-    Const SN_IRGASON = 9999
+    Const SN_IRGASON = 2556
     Const SDM_CLK_SPEED = 30  ' us
     Const EC100_SDM_ADR = 1
 
-    'Temp/RH Probe
-    Const SN_TRH = 9999
-
-    ' Quantum sensor
-    Const SN_PAR = 9999
-
-    ' Wind
-    Const SN_WIND = 9999
-
-    ' Soil probes
-    ' will probably be stored in an array or something
-
-    ' Soil heat flux
-    ' will probably be stored in an array or something
+    ' CNR4
+    Const SN_CNR4 = 244541
+    Const CHAN_DIFF_CNR4 = 1
+    Const CHAN_SE_CNR4 = 16
+    Const CHAN_EX_CNR4 = 1 
+    Const SW_UPPER_MULT = 1000.0 / 12.6  ' uV W-1 m2 -> W m-2 mV-1
+    Const SW_LOWER_MULT = 1000.0 / 14.22
+    Const LW_UPPER_MULT = 1000.0 / 9.19
+    Const LW_LOWER_MULT = 1000.0 / 9.84
 
 EndConstTable
 
-
+'====================================
 ' Defining meteorologic variables
-Public rho_CO2; Units rho_CO2 = mg m-3
+'====================================
 
-Public rho_H2O; Units rho_H2O = g m-3
+'IRGASON
+'=======
+' Raw data from EC100 command
+Public irgason(12)
+Alias irgason(1) ux; Units ux = m s-1
+Alias irgason(2) uy; Units uy = m s-1
+Alias irgason(3) uz; Units uz = m s-1
+Alias irgason(4) sonic_temp; Units sonic_temp = degC
+Alias irgason(5) diag_sonic; Units diag_sonic = unitless
+Alias irgason(6) rho_co2; Units rho_co2 = mg m-3
+Alias irgason(7) rho_h2o; Units rho_h2o = g m-3
+Alias irgason(8) diag_irga; Units diag_irga = unitless
+Alias irgason(9) cell_temp; Units cell_temp = degC
+Alias irgason(10) cell_press; Units cell_press = kPa
+Alias irgason(11) co2_signal; Units co2_signal = unitless
+Alias irgason(12) h2o_signal; Units h2o_signal = unitless
 
-Public PA; Units PA = kPa
-Public RH; Units RH = %
-Public T_SONIC; Units T_SONIC = degC
-Public TA; Units TA = degC
+' ' Data to be computed
+' Public CO2; Units CO2 = umolCO2 mol-1
+' Public CO2_MIXING_RATIO; Units CO2_MIXING_RATIO = umolCO2 mol-1
+' Public H2O; Units H2O = mmolH2O mol-1
+' Public H2O_MIXING_RATIO; Units H2O_MIXING_RATIO = mmolH2O mol-1
 
-Public D_SNOW; Units D_SNOW = cm
-Public P_RAIN; Units P_RAIN = mm
-Public P_SNOW; Units P_SNOW = mm
+' Diagnostic flags to be computed
+Dim disable_sonic as Boolean  ' flags for computing averages
+Dim disable_irga as Boolean  ' flags for computing averages
 
-Public LW_IN; Units LW_IN = W m-2
-Public LW_OUT; Units LW_OUT = W m-2
-Public SW_IN; Units SW_IN = W m-2
-Public SW_OUT; Units SW_OUT = W m-2
+' Datalogger
+' ==========
+Public panel_temp; Units panel_temp = degC
+Public battery; Units battery = V
 
-Public PPFD_IN; Units PPFD_IN = umol m-2 s-1
-Public PPFD_OUT; Units PPFD_OUT = umol m-2 s-1
+' CNR4
+' =====
+' data
+Public cnr4_raw(4)
+Alias cnr4_raw(1) sw_in_raw; Units sw_in_raw = mV
+Alias cnr4_raw(2) sw_out_raw; Units sw_out_raw = mV
+Alias cnr4_raw(3) lw_in_raw; Units lw_in_raw = mV
+Alias cnr4_raw(4) lw_out_raw; Units lw_out_raw = mV
+Public cnr4(4)
+Alias cnr4(1) sw_in; Units sw_in = W m-2
+Alias cnr4(2) sw_out; Units sw_out = W m-2
+Alias cnr4(3) lw_in; Units lw_in = W m-2
+Alias cnr4(4) lw_out; Units lw_out = W m-2
+Public cnr4_temp; Units cnr4_temp = degC
+Dim cnr4_temp_k, Rs, Vs_Vx
 
-Public SWC; Units SWC = %
-Public TS; Units TS = degC
 
-Public WD; Units WD = deg
-Public WS; Units WS = m s-1
-Public U; Units U = m s-1
-Public V; Units V = m s-1
-Public W; Units W = m s-1
-
-' Defining public intermediate variables for debugging
-' things like instrument voltages etc.
-Public BattV; Units BattV = V
-Public T_panel; Units T_panel = degC
-
-' Raw outputs from the sensors for debugging
-DataTable(Raw_5min, TRUE, -1)
+DataTable(FastData, TRUE, -1)
+    DataInterval(0, FAST_INTV, mSec, 0)
+    TableFile("CRD:"&Status.SerialNumber(1,1)&"_Fast", 64, -1, 0, NDAYS_FAST_CRD, Day, 0, 0)
+    ' N.B. The sensor noise of the IRGASON for the sonic temperature and CO2 density
+    ' measurements is such that using FP2 precision is acceptable.
+    ' Sonic temp RMSE noise: 0.025
+    ' FP2 precision (-80 to +80): 0.01
+    ' CO2 density RMSE noise: 0.2
+    ' FP2 precision (-800 to +800): 0.1
+    ' All other measurements require float32 precision (except diagnostics)
+    Sample(1, ux, IEEE4)
+    Sample(1, uy, IEEE4)
+    Sample(1, uz, IEEE4)
+    Sample(1, sonic_temp, FP2)
+    Sample(1, diag_sonic, UINT2)
+    Sample(1, rho_co2, FP2)
+    Sample(1, rho_h2o, IEEE4)
+    Sample(1, diag_irga, UINT4)
 EndTable
 
-' 30 minute averaged meteorologic data
-DataTable(Met_30min, TRUE, -1)
-    ' Things to do/consider
-    ' Use the Ameriflux data variable table as a reference to see which statistics, etc we need
-    ' Consider reporting PPM as well as density for our gasses, which is easier to interpret
-    ' Consider adding a disablevar field to filter out bad data
-    ' Remember to use circular statistics for wind direction where imnportant
+DataTable(SlowStatsData, TRUE, STATS_TABLE_SIZE)
+    DataInterval(0, STATS_INTV, Min, 0)
+    TableFile("CPU:"&Status.SerialNumber(1,1)&"_SlowStats", 64 -1, 0, NDAYS_STATS_CRD, Day, 0, 0)
+
+    Minimum(1, battery, FP2, FALSE, FALSE)
+    Average(1, panel_temp, FP2, FALSE, FALSE)
+
+    ' Summaries of fast data
+    Average(1, ux, IEEE4, disable_sonic)
+    Average(1, uy, IEEE4, disable_sonic)
+    Average(1, uz, IEEE4, disable_sonic)
+    StdDev(1, ux, IEEE4, disable_sonic)
+    StdDev(1, uy, IEEE4, disable_sonic)
+    StdDev(1, uz, IEEE4, disable_sonic)
+
+    Average(1, sonic_temp, IEEE4, disable_sonic)
+    StdDev(1, sonic_temp, IEEE4, disable_sonic)
+
+    Average(1, rho_co2, IEEE4, disable_irga)
+    StdDev(1, rho_co2, IEEE4, disable_irga)
+    Average(1, rho_h2o, IEEE4, disable_irga)
+    StdDev(1, rho_h2o, IEEE4, disable_irga)
+
+    Average(1, cell_temp, IEEE4, FALSE)
+    Average(1, cell_press, IEEE4, FALSE)
+
+    Totalize(1, disable_sonic, UINT2)
+    Totalize(1, disable_irga, UINT2)
+
+    ' CNR4
+    Average(4, sw_in, IEEE4, FALSE)
+    Average(1, cnr4_temp, FP2, FALSE)
+
 EndTable
 
-' High frequency data from IRGASON
-DataTable(Fast_50ms, TRUE, -1)
-    ' we will need
-    '   * Data: U, V, W, T_SONIC, rho_CO2, rho_H2O
-    '   * Diagnostics: diag_Sonic, diag_IRGA, signal_CO2, signal_H2O
-    '   * Other ancillary data: IRGASON TA, PA, CO2 density from fast-response temp???
+DataTable(SlowRawData, TRUE, -1)
+    DataInterval(0, SLOW_INTV, Min, 0)
+    TableFile("CPU:"&Status.SerialNumber(1,1)&"_SlowRaw", 64 -1, 0, NDAYS_SLOW_CRD, Day, 0, 0)
+
+    ' datalogger
+    Sample(1, battery, FP2)
+    Sample(1, panel_temp, FP2)
+
+    ' cnr4
+    Sample(4, sw_in, FP2)
+    Sample(4, sw_in_raw, FP2)
+    Sample(1, cnr4_temp, FP2)
+    
 EndTable
+
+'====================================
+' Main Program
+'====================================
+BeginProg
+    SDMSpeed(SDM_CLK_SPEED)
+    Scan(FAST_INTV, mSec, FAST_SCAN_BUFFER_SIZE, 0)
+        EC100(irgason, EC100_SDM_ADR, 1)
+        
+        disable_sonic = FALSE
+        disable_irga = FALSE
+        disable_sonic = (diag_sonic <> 0)
+        disable_irga = (diag_irga <> 0)
+        If disable_sonic Then ux = NAN : uy = NAN : uz = NAN : sonic_temp = NAN
+        If disable_irga Then rho_co2 = NAN : rho_h2o = NAN
+        
+        CallTable FastData
+    NextScan
+
+SlowSequence
+    Scan(SLOW_INTV, Min, 7, 0)
+        PanelTemp(panel_temp, 60)
+        Battery(battery)
+
+        ' CNR4
+        VoltDiff(cnr4_raw, 4, mV200, CHAN_DIFF_CNR4, True, 0, 60, 1, 0)
+        BrHalf(Vs_Vx, 1, mV5000, CHAN_SE_CNR4, CHAN_EX_CNR4, 1, 2500 TRUE, 0, 250, 1.0, 0)
+        
+        Rs = 1000*(Vs_Vx/(1-Vs_Vx))
+        cnr4_temp_k = 1/(1.0295e-3+2.391e-4*LN(Rs)+1.568e-7*(LN(Rs))^3)
+        cnr4_temp = cnr4_temp_k - 273.15
+
+        sw_in = sw_in_raw * SW_UPPER_MULT
+        sw_out = sw_out_raw * SW_LOWER_MULT
+        lw_in = (lw_in_raw * LW_UPPER_MULT) + (5.67e-8 * cnr4_temp_k^4)
+        lw_out = (lw_out_raw * LW_LOWER_MULT) + (5.67e-8 * (cnr4_temp_k^4))
+
+        CallTable(SlowRawData)
+        CallTable(SlowStatsData)
+    NextScan
+
+EndProg
