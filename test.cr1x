@@ -20,6 +20,12 @@
 '     Soil Moisture: Stevens Hydraprobe x???
 '     Soil Heat Flux: ???
 
+' TODO: test all sensor
+' TODO: add heat flux plates
+' TODO: add more soil moisture probes
+' TODO: test all sensors
+' TODO: better fault detection (set mV200 to mV200C for e.g.?), filter out obviously bad values in reported averages, but still record them in the raw file
+
 
 PipeLineMode
 AngleDegrees
@@ -33,7 +39,7 @@ ConstTable(Const_Table)
     Const FAST_SCAN_BUFFER_SIZE = 60 * (1000 INTDV FAST_INTV)  ' 60 second scan buffer
     Const NDAYS_FAST_CRD = 1  ' Number of days to store in the fast data CRD file
 
-    Const SLOW_INTV = 1  ' min
+    Const SLOW_INTV = 15  ' sec
     Const NDAYS_SLOW_CRD = 7
 
     Const STATS_INTV = 30  ' min, interval to store slow data
@@ -64,10 +70,11 @@ ConstTable(Const_Table)
     Const CMD_SDI12_BV10 = "M1!"  ' switch to MC1 if the measurement time is too long
 
     ' HygroVUE 10
+    ' WORKING
     Const SN_HV10 = 9999  ' placeholder
     ' why does CRBasic say that channel C1 is already in use?
     ' It should be fine since we're using a blocking command...
-    Const CHAN_C_HV10 = C5
+    Const CHAN_C_HV10 = C5  ' Brown 12V / White Data / Black G / Clear Shield
     Const ADR_SDI12_HV10 = 2
     Const CMD_SDI12_HV10 = "M3!"  ' switch to MC3 if the measurement time is too long
 
@@ -97,6 +104,8 @@ ConstTable(Const_Table)
     Const CHAN_EX_RMY = Vx3
     Const RMY_N_OFFSET = 0.0  ' compass direction that the north arrow points to on the wind meter. Should be 0.0 if mounted properly
 
+    ' PAR
+    ' WORKS
     Const SN_PAR = 9999  ' placeholder
     Const PAR_MULT = 100  ' umol m-2 s-1 mV-1
     Const CHAN_DIFF_PAR = 8  ' White + / Black -
@@ -275,7 +284,7 @@ DataTable(SlowStatsData, TRUE, STATS_TABLE_SIZE)
 EndTable
 
 DataTable(SlowRawData, TRUE, -1)
-    DataInterval(0, SLOW_INTV, Min, 0)
+    DataInterval(0, SLOW_INTV, Sec, 0)
     TableFile("CRD:"&Status.SerialNumber(1,1)&"_SlowRaw", 64, -1, 0, NDAYS_SLOW_CRD, Day, 0, 0)
 
     ' datalogger
@@ -335,7 +344,7 @@ BeginProg
     NextScan
 
 SlowSequence
-    Scan(SLOW_INTV, Min, 7, 0)
+    Scan(SLOW_INTV, Sec, 7, 0)
         PanelTemp(panel_temp, 60)
         Battery(battery)
 
