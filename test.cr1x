@@ -42,36 +42,39 @@ ConstTable(Const_Table)
     Const NDAYS_STATS_CRD = 30  ' Number of days to store in the slow data CRD file
 
     ' IRGASON
-    Const SN_IRGASON = 2556
+    Const SN_IRGASON = 9999
     Const SDM_CLK_SPEED = 30  ' us
     Const ADR_SDM_EC100 = 1
+    Const IRGASON_N_OFFSET = 0.0  ' degrees, compass direction that the north arrow points to on the sonic. Not used.
 
     ' CNR4
     Const SN_CNR4 = 244541
     Const CHAN_DIFF_CNR4 = 1
     Const CHAN_SE_CNR4 = 9
-    Const CHAN_EX_CNR4 = 1 
+    Const CHAN_EX_CNR4 = Vx1
     Const SW_UPPER_MULT = 1000.0 / 12.6  ' uV W-1 m2 -> W m-2 mV-1
     Const SW_LOWER_MULT = 1000.0 / 14.22
     Const LW_UPPER_MULT = 1000.0 / 9.19
     Const LW_LOWER_MULT = 1000.0 / 9.84
 
     ' BaroVUE 10
-    Const SN_BAROVUE10 = 9999  ' placeholder
-    Const CHAN_C_BAROVUE10 = 1
-    Const ADR_SDI12_BAROVUE10 = 1
-    Const CMD_SDI12_BAROVUE10 = "M1!"  ' might have to switch to C1?
+    Const SN_BV10 = 9999  ' placeholder
+    Const CHAN_C_BV10 = C5
+    Const ADR_SDI12_BV10 = 1
+    Const CMD_SDI12_BV10 = "M1!"  ' switch to MC1 if the measurement time is too long
 
     ' HygroVUE 10
-    Const SN_HYGROVUE10 = 9999  ' placeholder
-    Const CHAN_C_HYGROVUE10 = 1
-    Const ADR_SDI12_HYGROVUE10 = 2
-    Const CMD_SDI12_HYGROVUE10 = "M3!"  ' might have to switch to MC3?
+    Const SN_HV10 = 9999  ' placeholder
+    ' why does CRBasic say that channel C1 is already in use?
+    ' It should be fine since we're using a blocking command...
+    Const CHAN_C_HV10 = C5
+    Const ADR_SDI12_HV10 = 2
+    Const CMD_SDI12_HV10 = "M3!"  ' switch to MC3 if the measurement time is too long
 
     ' SI-111 SS
     Const SN_SI111 = 9999  ' placeholder
     Const CHAN_SE_SI111 = 10
-    Const CHAN_EX_SI111 = 1
+    Const CHAN_EX_SI111 = Vx2
     Const CHAN_DIFF_SI111 = 6
     Const m2 = 91266.1
     Const m1 = 10507600.0
@@ -79,6 +82,25 @@ ConstTable(Const_Table)
     Const b2 = 1175.15
     Const b1 = -30659.0
     Const b0 = -8708830.0
+
+    ' Hydraprobes
+    Const CMD_SDI12_HYDRA = "M!"
+    Const N_HYDRA = 9
+    Const CHAN_C_HYDRA = C7
+    Const ADR_SDI12_HYDRA = 1
+    ' idk how many sensors yet
+
+    ' Wind Monitor
+    Const SN_RMY = 9999  ' placeholder
+    Const CHAN_P_RMY = P1
+    Const CHAN_SE_RMY = 13
+    Const CHAN_EX_RMY = Vx3
+    Const RMY_N_OFFSET = 0.0  ' compass direction that the north arrow points to on the wind meter. Should be 0.0 if mounted properly
+
+    Const SN_PAR = 9999  ' placeholder
+    Const PAR_MULT = 100  ' umol m-2 s-1 mV-1
+    Const CHAN_DIFF_PAR = 8  ' White + / Black -
+
 EndConstTable
 
 '====================================
@@ -89,24 +111,24 @@ EndConstTable
 '=======
 ' Raw data from EC100 command
 Public irgason(12)
-Alias irgason(1) ux; Units ux = m s-1
-Alias irgason(2) uy; Units uy = m s-1
-Alias irgason(3) uz; Units uz = m s-1
-Alias irgason(4) sonic_temp; Units sonic_temp = degC
-Alias irgason(5) sonic_diag; Units sonic_diag = unitless
-Alias irgason(6) rho_co2; Units rho_co2 = mg m-3
-Alias irgason(7) rho_h2o; Units rho_h2o = g m-3
-Alias irgason(8) irga_diag; Units irga_diag = unitless
-Alias irgason(9) cell_temp; Units cell_temp = degC
-Alias irgason(10) cell_press; Units cell_press = kPa
-Alias irgason(11) co2_signal; Units co2_signal = unitless
-Alias irgason(12) h2o_signal; Units h2o_signal = unitless
+Alias irgason(1) = ux: Units ux = m s-1
+Alias irgason(2) = uy: Units uy = m s-1
+Alias irgason(3) = uz: Units uz = m s-1
+Alias irgason(4) = sonic_temp: Units sonic_temp = degC
+Alias irgason(5) = sonic_diag: Units sonic_diag = unitless
+Alias irgason(6) = rho_co2: Units rho_co2 = mg m-3
+Alias irgason(7) = rho_h2o: Units rho_h2o = g m-3
+Alias irgason(8) = irga_diag: Units irga_diag = unitless
+Alias irgason(9) = cell_temp: Units cell_temp = degC
+Alias irgason(10) = cell_press: Units cell_press = kPa
+Alias irgason(11) = co2_signal: Units co2_signal = unitless
+Alias irgason(12) = h2o_signal: Units h2o_signal = unitless
 
 ' ' Data to be computed
-' Public CO2; Units CO2 = umolCO2 mol-1
-' Public CO2_MIXING_RATIO; Units CO2_MIXING_RATIO = umolCO2 mol-1
-' Public H2O; Units H2O = mmolH2O mol-1
-' Public H2O_MIXING_RATIO; Units H2O_MIXING_RATIO = mmolH2O mol-1
+' Public CO2: Units CO2 = umolCO2 mol-1
+' Public CO2_MIXING_RATIO: Units CO2_MIXING_RATIO = umolCO2 mol-1
+' Public H2O: Units H2O = mmolH2O mol-1
+' Public H2O_MIXING_RATIO: Units H2O_MIXING_RATIO = mmolH2O mol-1
 
 ' Diagnostic flags to be computed
 Dim disable_sonic as Boolean  ' flags for computing averages
@@ -114,46 +136,72 @@ Dim disable_irga as Boolean  ' flags for computing averages
 
 ' Datalogger
 ' ==========
-Public panel_temp; Units panel_temp = degC
-Public battery; Units battery = V
+Public panel_temp: Units panel_temp = degC
+Public battery: Units battery = V
 
 ' CNR4
 ' =====
 ' data
-Public cnr4_raw(4)
-Alias cnr4_raw(1) sw_in_raw; Units sw_in_raw = mV
-Alias cnr4_raw(2) sw_out_raw; Units sw_out_raw = mV
-Alias cnr4_raw(3) lw_in_raw; Units lw_in_raw = mV
-Alias cnr4_raw(4) lw_out_raw; Units lw_out_raw = mV
+Public cnr4_mV(4)
+Alias cnr4_mV(1) = sw_in_mV: Units sw_in_mV = mV
+Alias cnr4_mV(2) = sw_out_mV: Units sw_out_mV = mV
+Alias cnr4_mV(3) = lw_in_mV: Units lw_in_mV = mV
+Alias cnr4_mV(4) = lw_out_mV: Units lw_out_mV = mV
 Public cnr4(4)
-Alias cnr4(1) sw_in; Units sw_in = W m-2
-Alias cnr4(2) sw_out; Units sw_out = W m-2
-Alias cnr4(3) lw_in; Units lw_in = W m-2
-Alias cnr4(4) lw_out; Units lw_out = W m-2
-Public cnr4_temp; Units cnr4_temp = degC
+Alias cnr4(1) = sw_in: Units sw_in = W m-2
+Alias cnr4(2) = sw_out: Units sw_out = W m-2
+Alias cnr4(3) = lw_in: Units lw_in = W m-2
+Alias cnr4(4) = lw_out: Units lw_out = W m-2
+Public cnr4_temp: Units cnr4_temp = degC
 Dim cnr4_temp_k, Rs, Vs_Vx
 
 ' BaroVUE 10
 ' ==========
-Public barovue10(3)
-Alias barovue10(1) bv10_press; Units bv10_press = kPa
-Alias barovue10(2) bv10_temp; Units bv10_temp = degC
-Alias barovue10(3) bv10_diag; Units bv10_diag = unitless
+Public bv10(3)
+Alias bv10(1) = press: Units press = kPa
+Alias bv10(2) = bv10_temp: Units bv10_temp = degC
+Alias bv10(3) = bv10_diag: Units bv10_diag = unitless
 
 ' HygroVUE 10
 ' ===========
-Public hygrovue10(4)
-Alias hygrovue10(1) hv10_temp; Units hv10_temp = degC
-Alias hygrovue10(2) hv10_rh; Units hv10_rh = pct
-Alias hygrovue10(3) hv10_dew_point; Units hv10_dew_point = degC
-Alias hygrovue10(4) hv10_vapor_press; Units hv10_vapor_press = kPa
+Public hv10(4)
+Alias hv10(1) = temp: Units temp = degC
+Alias hv10(2) = rh: Units rh = pct
+Alias hv10(3) = dew_point: Units dew_point = degC
+Alias hv10(4) = vapor_press: Units vapor_press = kPa
+Public hv10_diag: Units hv10_diag = unitless
 
 ' SI-111 SS
 ' ==========
-Public si111_raw(2)
-Alias si111_raw(1) si111_temp; Units si111_temp = degC
-Alias si111_raw(2) si111_surf_temp_raw; Units si111_surf_temp_raw = mV
-Public si111_surf_temp; Units si111_surf_temp = degC
+Public si111_mV(2)
+Alias si111_mV(1) = si111_temp: Units si111_temp = degC
+Alias si111_mV(2) = surf_temp_mV: Units surf_temp_mV = mV
+Public surf_temp: Units surf_temp = degC
+Dim m
+Dim b
+
+' HydraProbe
+' ==========
+' How can I make 8 more of these things without creating incredible clutter?
+Public hydra(9)
+Alias hydra(1) = vwc: Units vwc = unitless
+Alias hydra(2) = soil_cond: Units soil_cond = S m-1
+Alias hydra(3) = soil_temp: Units soil_temp = degC
+Alias hydra(4) = soil_temp_F: Units soil_temp_F = Fahrenheit
+Alias hydra(5) = uncorr_soil_cond: Units uncorr_soil_cond = S/m
+Alias hydra(6) = uncorr_r_eps: Units uncorr_r_eps = unitless
+Alias hydra(7) = uncorr_i_eps: Units uncorr_i_eps = unitless
+Alias hydra(8) = r_eps: Units r_eps = unitless
+Alias hydra(9) = i_eps: Units i_eps = unitless
+
+' RMY Wind Monitor
+' =================
+Public ws : Units ws = m s-1
+Public wd : Units wd = deg
+
+' PAR Sensor
+' ===========
+Public ppfd : Units ppfd = umol m-2 s-1
 
 DataTable(FastData, TRUE, -1)
     DataInterval(0, FAST_INTV, mSec, 0)
@@ -177,71 +225,88 @@ EndTable
 
 DataTable(SlowStatsData, TRUE, STATS_TABLE_SIZE)
     DataInterval(0, STATS_INTV, Min, 0)
-    TableFile("CPU:"&Status.SerialNumber(1,1)&"_SlowStats", 64 -1, 0, NDAYS_STATS_CRD, Day, 0, 0)
+    TableFile("CRD:"&Status.SerialNumber(1,1)&"_SlowStats", 64, -1, 0, NDAYS_STATS_CRD, Day, 0, 0)
 
     Minimum(1, battery, FP2, FALSE, FALSE)
-    Average(1, panel_temp, FP2, FALSE, FALSE)
+    Average(1, panel_temp, FP2, FALSE)
 
     ' Summaries of fast data
     Average(1, ux, IEEE4, disable_sonic)
     Average(1, uy, IEEE4, disable_sonic)
     Average(1, uz, IEEE4, disable_sonic)
-    StdDev(1, ux, IEEE4, disable_sonic)
-    StdDev(1, uy, IEEE4, disable_sonic)
-    StdDev(1, uz, IEEE4, disable_sonic)
 
     Average(1, sonic_temp, IEEE4, disable_sonic)
-    StdDev(1, sonic_temp, IEEE4, disable_sonic)
 
     Average(1, rho_co2, IEEE4, disable_irga)
-    StdDev(1, rho_co2, IEEE4, disable_irga)
     Average(1, rho_h2o, IEEE4, disable_irga)
-    StdDev(1, rho_h2o, IEEE4, disable_irga)
 
     Average(1, cell_temp, IEEE4, FALSE)
     Average(1, cell_press, IEEE4, FALSE)
 
-    Totalize(1, disable_sonic, UINT2)
-    Totalize(1, disable_irga, UINT2)
+    Totalize(1, disable_sonic, UINT2, FALSE)
+    Totalize(1, disable_irga, UINT2, FALSE)
 
-    ' CNR4
+    ' CNR4 sw/lw in/out
     Average(4, sw_in, IEEE4, FALSE)
     Average(1, cnr4_temp, IEEE4, FALSE)
 
     ' Barovue10 temperature, pressure, diagnostic
-    Average(3, bv10_press, IEEE4, FALSE)
+    Average(2, press, IEEE4, FALSE)
 
     ' Hygrovue10, temp, rh, dp, vp
-    Average(4, hv10_temp, IEEE4, FALSE)
+    Average(4, temp, IEEE4, FALSE)
 
     ' SI-111 SS
     Average(1, si111_temp, IEEE4, FALSE)
-    Average(1, si111_surf_temp, IEEE4, FALSE)
+    Average(1, surf_temp, IEEE4, FALSE)
+
+    ' Hydraprobes
+    Average(1, vwc, IEEE4, FALSE)
+    Average(1, soil_temp, IEEE4, FALSE)
+
+    ' Wind Monitor
+    Average(1, ws, IEEE4, FALSE)
+    WindVector(1, ws, wd, IEEE4, FALSE, 0, 0, 3)
+    FieldNames("wd_Avg")
+
+    ' PPFD
+    Average(1, ppfd, IEEE4, FALSE)
 
 EndTable
 
 DataTable(SlowRawData, TRUE, -1)
     DataInterval(0, SLOW_INTV, Min, 0)
-    TableFile("CPU:"&Status.SerialNumber(1,1)&"_SlowRaw", 64 -1, 0, NDAYS_SLOW_CRD, Day, 0, 0)
+    TableFile("CRD:"&Status.SerialNumber(1,1)&"_SlowRaw", 64, -1, 0, NDAYS_SLOW_CRD, Day, 0, 0)
 
     ' datalogger
     Sample(1, battery, FP2)
     Sample(1, panel_temp, FP2)
 
-    ' cnr4
+    ' cnr4 sw/lw in/out
     Sample(4, sw_in, FP2)
-    Sample(4, sw_in_raw, FP2)
+    Sample(4, sw_in_mV, FP2)
     Sample(1, cnr4_temp, FP2)
 
-    ' barovue10 tmperature, pressure, diagnostic
+    ' bv10 tmperature, pressure, diagnostic
     Sample(3, press, FP2)
 
-    ' hygrovue10, temp, rh, dp, vp
-    Sample(4, hv10_temp, FP2)
+    ' hv10, temp, rh, dp, vp
+    Sample(4, temp, FP2)
+    Sample(1, hv10_diag, FP2)
 
     ' SI-111 SS
     Sample(1, si111_temp, FP2)
-    Sample(1, si111_surf_temp_raw, FP2)
+    Sample(1, surf_temp_mV, FP2)
+
+    ' Hydraprobes
+    Sample(9, vwc, FP2)
+
+    ' Wind Monitor
+    Sample(1, ws, FP2)
+    Sample(1, wd, FP2)
+
+    ' PPFD
+    Sample(1, ppfd, FP2)
 EndTable
 
 '====================================
@@ -259,6 +324,13 @@ BeginProg
         If disable_sonic Then ux = NAN : uy = NAN : uz = NAN : sonic_temp = NAN
         If disable_irga Then rho_co2 = NAN : rho_h2o = NAN
         
+        ' Wind Monitor
+        PulseCount(ws, 1, CHAN_P_RMY, 5, 1, 0.098, 0)
+        BrHalf(wd, 1, mV5000, CHAN_SE_RMY, CHAN_EX_RMY, 1, 2500, TRUE,0,15000, 355, 0)
+        If wd >= 360 OR wd < 0 Then wd = NAN  ' bad values
+        wd += RMY_N_OFFSET  ' apply north offset
+        If wd >= 360 Then wd -= 360  ' wrap around to ensure 0 <= wd < 360
+
         CallTable FastData
     NextScan
 
@@ -268,30 +340,39 @@ SlowSequence
         Battery(battery)
 
         ' CNR4
-        VoltDiff(cnr4_raw, 4, mV200, CHAN_DIFF_CNR4, True, 0, 60, 1, 0)
-        BrHalf(Vs_Vx, 1, mV5000, CHAN_SE_CNR4, CHAN_EX_CNR4, 1, 2500 TRUE, 0, 250, 1.0, 0)
+        VoltDiff(cnr4_mV, 4, mV200, CHAN_DIFF_CNR4, True, 0, 60, 1, 0)
+        BrHalf(Vs_Vx, 1, mV5000, CHAN_SE_CNR4, CHAN_EX_CNR4, 1, 2500, TRUE, 0, 250, 1.0, 0)
         
         Rs = 1000*(Vs_Vx/(1-Vs_Vx))
         cnr4_temp_k = 1/(1.0295e-3+2.391e-4*LN(Rs)+1.568e-7*(LN(Rs))^3)
         cnr4_temp = cnr4_temp_k - 273.15
 
-        sw_in = sw_in_raw * SW_UPPER_MULT
-        sw_out = sw_out_raw * SW_LOWER_MULT
-        lw_in = (lw_in_raw * LW_UPPER_MULT) + (5.67e-8 * cnr4_temp_k^4)
-        lw_out = (lw_out_raw * LW_LOWER_MULT) + (5.67e-8 * (cnr4_temp_k^4))
+        sw_in = sw_in_mV * SW_UPPER_MULT
+        sw_out = sw_out_mV * SW_LOWER_MULT
+        lw_in = (lw_in_mV * LW_UPPER_MULT) + (5.67e-8 * cnr4_temp_k^4)
+        lw_out = (lw_out_mV * LW_LOWER_MULT) + (5.67e-8 * (cnr4_temp_k^4))
 
         ' BaroVUE and HygroVUE 10 press, temp, rh, dp, vp
-        SDI12(barovue10, CHAN_C_BAROVUE_10, ADR_SDI12_BAROVUE10, CMD_SDI12_BAROVUE10, 1, 0.0, -1)
-        SDI12(hygrovue10, CHAN_C_HYGROVUE10, ADR_SDI12_HYGROVUE10, CMD_SDI12_HYGROVUE10, 1, 0.0, -1)
+        SDI12Recorder(bv10, CHAN_C_BV10, ADR_SDI12_BV10, CMD_SDI12_BV10, 1, 0.0, -1, 1)
+        SDI12Recorder(hv10, CHAN_C_HV10, ADR_SDI12_HV10, CMD_SDI12_HV10, 1, 0.0, -1, 1)
+        hv10_diag = temp
+        If temp = -99.99 OR temp = -9999 or rh = 0 Then temp = NAN : rh = NAN : dew_point = NAN : vapor_press = NAN
 
         ' SI-111 SS
         Therm109(si111_temp, 1, CHAN_SE_SI111, CHAN_EX_SI111, 0, 60, 1.0, 0.0)
-        VoltDiff(si111_surf_temp_raw, 1, mV200, CHAN_DIFF_SI111, True, 0, 60, 1, 0)
+        VoltDiff(surf_temp_mV, 1, mV200, CHAN_DIFF_SI111, True, 0, 60, 1, 0)
         m = m0 + (m1*si111_temp) + (m2*si111_temp^2)
         b = b0 + (b1*si111_temp) + (b2*si111_temp^2)
         ' Tsurf_K = (m*V + b + Tk^4)^(1/4)
-        si111_surf_temp = SQR(SQR(m*si111_surf_temp_raw + b (si111_temp + 273.15)^4)) - 273.15
+        surf_temp = SQR(SQR(m*surf_temp_mV + b + (si111_temp + 273.15)^4)) - 273.15
 
+        ' Hydraprobes
+        ' returns 9 measurements: HJFGOKMLN
+        ' Ask for help from campbell on WTF the waitontimeout command means
+        SDI12Recorder(hydra, CHAN_C_HYDRA, ADR_SDI12_HYDRA, CMD_SDI12_HYDRA, 1.0, 0.0, -1)
+
+        ' PPFD
+        VoltDiff(ppfd,1, mV200C,CHAN_DIFF_PAR, TRUE ,0,60,100.0,0)
 
         CallTable(SlowRawData)
         CallTable(SlowStatsData)
