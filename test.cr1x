@@ -18,7 +18,7 @@
 '     Rain/Snow: radar rain gauge????
 ' Soil:
 '     Soil Moisture: Stevens Hydraprobe x???
-'     Soil Heat Flux: ???
+'     Soil Heat Flux: HFP01 x3
 
 ' TODO: test all sensor
 ' TODO: add heat flux plates
@@ -48,16 +48,27 @@ ConstTable(Const_Table)
     Const NDAYS_STATS_CRD = 30  ' Number of days to store in the slow data CRD file
 
     ' IRGASON
+    ' WORKS
+    ' Green SDM1  / White SDM 2 / Red+Brown SDM 3 / Black + Shield G
     Const SN_IRGASON = 9999
     Const SDM_CLK_SPEED = 30  ' us
     Const ADR_SDM_EC100 = 1
+    Const CHAN_C_EC100 = C1
     Const IRGASON_N_OFFSET = 0.0  ' degrees, compass direction that the north arrow points to on the sonic. Not used.
 
     ' CNR4
+    ' RADIOMETER WORKING, TEMPERATURE NOT WORKING
+    ' In order:
+    ' Red + / Blue - / Jumper to ag
+    ' White + / Black - / Jumper to ag
+    ' Grey + / Yellow - / Jump to ag
+    ' Brown + / Green - / Jump to ag
+    ' 
+    ' Thermister: White SE / Black + Clear ag / Red EX
     Const SN_CNR4 = 244541
     Const CHAN_DIFF_CNR4 = 1
-    Const CHAN_SE_CNR4 = 9
-    Const CHAN_EX_CNR4 = Vx1
+    Const CHAN_SE_CNR4 = 13
+    Const CHAN_EX_CNR4 = Vx4
     Const SW_UPPER_MULT = 1000.0 / 12.6  ' uV W-1 m2 -> W m-2 mV-1
     Const SW_LOWER_MULT = 1000.0 / 14.22
     Const LW_UPPER_MULT = 1000.0 / 9.19
@@ -80,9 +91,9 @@ ConstTable(Const_Table)
 
     ' SI-111 SS
     Const SN_SI111 = 9999  ' placeholder
-    Const CHAN_SE_SI111 = 10
-    Const CHAN_EX_SI111 = Vx2
-    Const CHAN_DIFF_SI111 = 6
+    Const CHAN_SE_SI111 = 12
+    Const CHAN_EX_SI111 = Vx3
+    Const CHAN_DIFF_SI111 = 5
     Const m2 = 91266.1
     Const m1 = 10507600.0
     Const m0 = 1641750000.0
@@ -100,8 +111,8 @@ ConstTable(Const_Table)
     ' Wind Monitor
     Const SN_RMY = 9999  ' placeholder
     Const CHAN_P_RMY = P1
-    Const CHAN_SE_RMY = 13
-    Const CHAN_EX_RMY = Vx3
+    Const CHAN_SE_RMY = 14
+    Const CHAN_EX_RMY = Vx2
     Const RMY_N_OFFSET = 0.0  ' compass direction that the north arrow points to on the wind meter. Should be 0.0 if mounted properly
 
     ' PAR
@@ -109,6 +120,21 @@ ConstTable(Const_Table)
     Const SN_PAR = 9999  ' placeholder
     Const PAR_MULT = 100  ' umol m-2 s-1 mV-1
     Const CHAN_DIFF_PAR = 8  ' White + / Black -
+
+    ' Volt116
+    Const ADR_CPI_VOLT116 = 1
+        ' HFP01 on Volt116
+        Const NUM_HFP01 = 3
+        Const SN_HFP01_1 = 24438  ' placeholder
+        Const SN_HFP01_2 = 9999  ' placeholder
+        Const SN_HFP01_3 = 9999  ' placeholder
+        Const HFP_1_MULT = 1000 / 61.88  ' mV W-1 m2
+        Const HFP_2_MULT = 9999  ' mV W-1 m2
+        Const HFP_3_MULT = 9999  ' mV W-1 m-2
+        
+        Const CHAN_DIFF_HFP01_1 = 9  ' Green - / White + / Black AG
+        Const CHAN_DIFF_HFP01_2 = 10
+        Const CHAN_DIFF_HFP01_3 = 11
 
 EndConstTable
 
@@ -128,10 +154,11 @@ Alias irgason(5) = sonic_diag: Units sonic_diag = unitless
 Alias irgason(6) = rho_co2: Units rho_co2 = mg m-3
 Alias irgason(7) = rho_h2o: Units rho_h2o = g m-3
 Alias irgason(8) = irga_diag: Units irga_diag = unitless
-Alias irgason(9) = cell_temp: Units cell_temp = degC
-Alias irgason(10) = cell_press: Units cell_press = kPa
+Alias irgason(9) = irgason_temp: Units irgason_temp = degC
+Alias irgason(10) = irgason_press: Units irgason_press = kPa
 Alias irgason(11) = co2_signal: Units co2_signal = unitless
 Alias irgason(12) = h2o_signal: Units h2o_signal = unitless
+SDMBeginPort(CHAN_C_EC100)
 
 ' ' Data to be computed
 ' Public CO2: Units CO2 = umolCO2 mol-1
@@ -162,7 +189,7 @@ Alias cnr4(2) = sw_out: Units sw_out = W m-2
 Alias cnr4(3) = lw_in: Units lw_in = W m-2
 Alias cnr4(4) = lw_out: Units lw_out = W m-2
 Public cnr4_temp: Units cnr4_temp = degC
-Dim cnr4_temp_k, Rs, Vs_Vx
+Public cnr4_temp_k, Rs, Vs_Vx
 
 ' BaroVUE 10
 ' ==========
@@ -212,6 +239,19 @@ Public wd : Units wd = deg
 ' ===========
 Public ppfd : Units ppfd = umol m-2 s-1
 
+' HFP01 Soil Heat Flux Plates
+' ===========================
+Const HFP_MULT(NUM_HFP01) = (HFP_1_MULT, HFP_2_MULT, HFP_3_MULT)
+'hfp_mult(NUM_HFP01)
+'hfp_mult(1) = HFP_1_MULT
+'hfp_mult(2) = HFP_2_MULT
+'hfp_mult(3) = HFP_3_MULT
+Public hfp(NUM_HFP01)
+Alias hfp(1) = G_1: Units G_1 = W m-2
+Alias hfp(2) = G_2: Units G_2 = W m-2
+Alias hfp(3) = G_3: Units G_3 = W m-2
+
+
 DataTable(FastData, TRUE, -1)
     DataInterval(0, FAST_INTV, mSec, 0)
     TableFile("CRD:"&Status.SerialNumber(1,1)&"_Fast", 64, -1, 0, NDAYS_FAST_CRD, Day, 0, 0)
@@ -249,8 +289,8 @@ DataTable(SlowStatsData, TRUE, STATS_TABLE_SIZE)
     Average(1, rho_co2, IEEE4, disable_irga)
     Average(1, rho_h2o, IEEE4, disable_irga)
 
-    Average(1, cell_temp, IEEE4, FALSE)
-    Average(1, cell_press, IEEE4, FALSE)
+    Average(1, irgason_temp, IEEE4, FALSE)
+    Average(1, irgason_press, IEEE4, FALSE)
 
     Totalize(1, disable_sonic, UINT2, FALSE)
     Totalize(1, disable_irga, UINT2, FALSE)
@@ -280,6 +320,9 @@ DataTable(SlowStatsData, TRUE, STATS_TABLE_SIZE)
 
     ' PPFD
     Average(1, ppfd, IEEE4, FALSE)
+
+    ' Soil Heat Flux
+    Average(NUM_HFP01, G_1, IEEE4, FALSE)
 
 EndTable
 
@@ -316,6 +359,10 @@ DataTable(SlowRawData, TRUE, -1)
 
     ' PPFD
     Sample(1, ppfd, FP2)
+
+    ' Soil Heat Flux
+    Sample(NUM_HFP01, G_1, FP2)
+
 EndTable
 
 '====================================
@@ -349,12 +396,12 @@ SlowSequence
         Battery(battery)
 
         ' CNR4
-        VoltDiff(cnr4_mV, 4, mV200, CHAN_DIFF_CNR4, True, 0, 60, 1, 0)
-        BrHalf(Vs_Vx, 1, mV5000, CHAN_SE_CNR4, CHAN_EX_CNR4, 1, 2500, TRUE, 0, 250, 1.0, 0)
+        VoltDiff(cnr4_mV, 4,mV200C, CHAN_DIFF_CNR4, True, 0, 60, 1, 0)
+        BrHalf(Vs_Vx, 1,mV5000, CHAN_SE_CNR4, CHAN_EX_CNR4, 1, 2500, TRUE, 0, 250, 1.0, 0)
         
         Rs = 1000*(Vs_Vx/(1-Vs_Vx))
-        cnr4_temp_k = 1/(1.0295e-3+2.391e-4*LN(Rs)+1.568e-7*(LN(Rs))^3)
-        cnr4_temp = cnr4_temp_k - 273.15
+        cnr4_temp = 1/(1.0295e-3+2.391e-4*LN(Rs)+1.568e-7*(LN(Rs))^3) - 273.15
+        cnr4_temp_k = cnr4_temp + 273.15
 
         sw_in = sw_in_mV * SW_UPPER_MULT
         sw_out = sw_out_mV * SW_LOWER_MULT
@@ -382,6 +429,9 @@ SlowSequence
 
         ' PPFD
         VoltDiff(ppfd,1, mV200C,CHAN_DIFF_PAR, TRUE ,0,60,100.0,0)
+
+        ' Soil Heat Flux
+        CDM_VoltDiff(VOLT116, ADR_CPI_VOLT116, hfp, NUM_HFP01,mV200C, CHAN_DIFF_HFP01_1,True, 200, 250, HFP_MULT, 0)
 
         CallTable(SlowRawData)
         CallTable(SlowStatsData)
