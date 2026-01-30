@@ -39,7 +39,7 @@ ConstTable(Const_Table)
     Const FAST_SCAN_BUFFER_SIZE = 60 * (1000 INTDV FAST_INTV)  ' 60 second scan buffer
     Const NDAYS_FAST_CRD = 1  ' Number of days to store in the fast data CRD file
 
-    Const SLOW_INTV = 15  ' sec
+    Const SLOW_INTV = 30  ' sec
     Const NDAYS_SLOW_CRD = 7
 
     Const STATS_INTV = 30  ' min, interval to store slow data
@@ -103,9 +103,9 @@ ConstTable(Const_Table)
 
     ' Hydraprobes
     Const CMD_SDI12_HYDRA = "M!"
-    Const N_HYDRA = 9
     Const CHAN_C_HYDRA = C7
-    Const ADR_SDI12_HYDRA = 1
+    Const ADR_SDI12_HYDRA = "0123456789ABCDE"
+    Const NUM_HYDRA = Len(ADR_SDI12_HYDRA)
     ' idk how many sensors yet
 
     ' Wind Monitor
@@ -124,17 +124,10 @@ ConstTable(Const_Table)
     ' Volt116
     Const ADR_CPI_VOLT116 = 1
         ' HFP01 on Volt116
-        Const NUM_HFP01 = 3
-        Const SN_HFP01_1 = 24438  ' placeholder
-        Const SN_HFP01_2 = 9999  ' placeholder
-        Const SN_HFP01_3 = 9999  ' placeholder
-        Const HFP_1_MULT = 1000 / 61.88  ' mV W-1 m2
-        Const HFP_2_MULT = 9999  ' mV W-1 m2
-        Const HFP_3_MULT = 9999  ' mV W-1 m-2
-        
-        Const CHAN_DIFF_HFP01_1 = 9  ' Green - / White + / Black AG
-        Const CHAN_DIFF_HFP01_2 = 10
-        Const CHAN_DIFF_HFP01_3 = 11
+        Const NUM_HFP = 3        
+        Const SN_HFP(NUM_HFP) = {24438, 9999, 9999}
+        Const HFP_MULT(NUM_HFP) = {1000/61.88, 9999, 9999}
+        Const CHAN_DIFF_HFP = 1 ' Green - / White + / Black AG
 
 EndConstTable
 
@@ -173,7 +166,7 @@ Dim disable_irga as Boolean  ' flags for computing averages
 ' Datalogger
 ' ==========
 Public panel_temp: Units panel_temp = degC
-Public battery: Units battery = V
+Public batt: Units batt = V
 
 ' CNR4
 ' =====
@@ -206,6 +199,8 @@ Alias hv10(2) = rh: Units rh = pct
 Alias hv10(3) = dew_point: Units dew_point = degC
 Alias hv10(4) = vapor_press: Units vapor_press = kPa
 Public hv10_diag: Units hv10_diag = unitless
+Public sat_vapor_press: Units sat_vapor_press = kPa
+Public vpd: Units vpd = kPa
 
 ' SI-111 SS
 ' ==========
@@ -218,17 +213,17 @@ Dim b
 
 ' HydraProbe
 ' ==========
-' How can I make 8 more of these things without creating incredible clutter?
-Public hydra(9)
-Alias hydra(1) = vwc: Units vwc = unitless
-Alias hydra(2) = soil_cond: Units soil_cond = S m-1
-Alias hydra(3) = soil_temp: Units soil_temp = degC
-Alias hydra(4) = soil_temp_F: Units soil_temp_F = Fahrenheit
-Alias hydra(5) = uncorr_soil_cond: Units uncorr_soil_cond = S/m
-Alias hydra(6) = uncorr_r_eps: Units uncorr_r_eps = unitless
-Alias hydra(7) = uncorr_i_eps: Units uncorr_i_eps = unitless
-Alias hydra(8) = r_eps: Units r_eps = unitless
-Alias hydra(9) = i_eps: Units i_eps = unitless
+' Hydraprobe outputs stored in a flat array, indexed in RMO
+Dim hydra(9)
+Public vwc(NUM_HYDRA): Units vwc = unitless
+Public soil_cond(NUM_HYDRA): Units soil_cond = S m-1
+Public soil_temp(NUM_HYDRA): Units soil_temp = degC
+Public soil_temp_F(NUM_HYDRA):  Units soil_temp_F = degF
+Public uncorr_soil_cond(NUM_HYDRA):  Units uncorr_soil_cond = S m-1
+Public uncorr_r_eps(NUM_HYDRA): Units uncorr_r_eps = unitless
+Public uncorr_i_eps(NUM_HYDRA): Units uncorr_i_eps = unitless
+Public r_eps(NUM_HYDRA): Units r_eps = unitless
+Public i_eps(NUM_HYDRA):  Units i_eps = unitless
 
 ' RMY Wind Monitor
 ' =================
@@ -241,15 +236,10 @@ Public ppfd : Units ppfd = umol m-2 s-1
 
 ' HFP01 Soil Heat Flux Plates
 ' ===========================
-Const HFP_MULT(NUM_HFP01) = (HFP_1_MULT, HFP_2_MULT, HFP_3_MULT)
-'hfp_mult(NUM_HFP01)
-'hfp_mult(1) = HFP_1_MULT
-'hfp_mult(2) = HFP_2_MULT
-'hfp_mult(3) = HFP_3_MULT
-Public hfp(NUM_HFP01)
-Alias hfp(1) = G_1: Units G_1 = W m-2
-Alias hfp(2) = G_2: Units G_2 = W m-2
-Alias hfp(3) = G_3: Units G_3 = W m-2
+Public G(NUM_HFP): Units G = W m-2
+'Alias hfp(1) = G_1: Units G_1 = W m-2
+'Alias hfp(2) = G_2: Units G_2 = W m-2
+'Alias hfp(3) = G_3: Units G_3 = W m-2
 
 
 DataTable(FastData, TRUE, -1)
@@ -276,22 +266,18 @@ DataTable(SlowStatsData, TRUE, STATS_TABLE_SIZE)
     DataInterval(0, STATS_INTV, Min, 0)
     TableFile("CRD:"&Status.SerialNumber(1,1)&"_SlowStats", 64, -1, 0, NDAYS_STATS_CRD, Day, 0, 0)
 
-    Minimum(1, battery, FP2, FALSE, FALSE)
+    Minimum(1, batt, FP2, FALSE, FALSE)
     Average(1, panel_temp, FP2, FALSE)
 
     ' Summaries of fast data
     Average(1, ux, IEEE4, disable_sonic)
     Average(1, uy, IEEE4, disable_sonic)
     Average(1, uz, IEEE4, disable_sonic)
-
     Average(1, sonic_temp, IEEE4, disable_sonic)
-
     Average(1, rho_co2, IEEE4, disable_irga)
     Average(1, rho_h2o, IEEE4, disable_irga)
-
     Average(1, irgason_temp, IEEE4, FALSE)
     Average(1, irgason_press, IEEE4, FALSE)
-
     Totalize(1, disable_sonic, UINT2, FALSE)
     Totalize(1, disable_irga, UINT2, FALSE)
 
@@ -304,25 +290,31 @@ DataTable(SlowStatsData, TRUE, STATS_TABLE_SIZE)
 
     ' Hygrovue10, temp, rh, dp, vp
     Average(4, temp, IEEE4, FALSE)
+    Average(1, sat_vapor_press, IEEE4, FALSE)
+    Average(1, vpd, IEEE4, FALSE)
 
     ' SI-111 SS
     Average(1, si111_temp, IEEE4, FALSE)
     Average(1, surf_temp, IEEE4, FALSE)
-
-    ' Hydraprobes
-    Average(1, vwc, IEEE4, FALSE)
-    Average(1, soil_temp, IEEE4, FALSE)
-
+    
     ' Wind Monitor
     Average(1, ws, IEEE4, FALSE)
     WindVector(1, ws, wd, IEEE4, FALSE, 0, 0, 3)
     FieldNames("wd_Avg")
-
+    
     ' PPFD
     Average(1, ppfd, IEEE4, FALSE)
 
     ' Soil Heat Flux
-    Average(NUM_HFP01, G_1, IEEE4, FALSE)
+    Average(NUM_HFP, G, IEEE4, False)
+    FieldNames("G_A_5cm_Avg,G_B_5cm_Avg,G_C_5cm_Avg")
+    
+    ' Hydraprobes
+    Average(NUM_HYDRA, vwc, IEEE4, False)
+    FieldNames("vwc_A_5cm_Avg,vwc_A_10cm_Avg,vwc_A_15cm_Avg,vwc_A_30cm_Avg,vwc_A_50cm_Avg,vwc_B_5cm_Avg,vwc_B_10cm_Avg,vwc_B_15cm_Avg,vwc_B_30cm_Avg,vwc_B_50cm_Avg,vwc_C_5cm_Avg,vwc_C_10cm_Avg,vwc_C_15cm_Avg,vwc_C_30cm_Avg,vwc_C_50cm_Avg")
+    Average(NUM_HYDRA, soil_temp, IEEE4, False)
+    FieldNames("soil_temp_A_5cm_Avg,soil_temp_A_10cm_Avg,soil_temp_A_15cm_Avg,soil_temp_A_30cm_Avg,soil_temp_A_50cm_Avg,soil_temp_B_5cm_Avg,soil_temp_B_10cm_Avg,soil_temp_B_15cm_Avg,soil_temp_B_30cm_Avg,soil_temp_B_50cm_Avg,soil_temp_C_5cm_Avg,soil_temp_C_10cm_Avg,soil_temp_C_15cm_Avg,soil_temp_C_30cm_Avg,soil_temp_C_50cm_Avg")
+
 
 EndTable
 
@@ -331,8 +323,20 @@ DataTable(SlowRawData, TRUE, -1)
     TableFile("CRD:"&Status.SerialNumber(1,1)&"_SlowRaw", 64, -1, 0, NDAYS_SLOW_CRD, Day, 0, 0)
 
     ' datalogger
-    Sample(1, battery, FP2)
+    Sample(1, batt, FP2)
     Sample(1, panel_temp, FP2)
+    
+    ' Summaries of fast data
+    Sample(1, ux, IEEE4)
+    Sample(1, uy, IEEE4)
+    Sample(1, uz, IEEE4)
+    Sample(1, sonic_temp, IEEE4)
+    Sample(1, rho_co2, IEEE4)
+    Sample(1, rho_h2o, IEEE4)
+    Sample(1, irgason_temp, IEEE4)
+    Sample(1, irgason_press, IEEE4)
+    Sample(1, disable_sonic, UINT2)
+    Sample(1, disable_irga, UINT2)
 
     ' cnr4 sw/lw in/out
     Sample(4, sw_in, FP2)
@@ -345,13 +349,12 @@ DataTable(SlowRawData, TRUE, -1)
     ' hv10, temp, rh, dp, vp
     Sample(4, temp, FP2)
     Sample(1, hv10_diag, FP2)
+    Sample(1, sat_vapor_press, FP2)
+    Sample(1, vpd, FP2)
 
     ' SI-111 SS
     Sample(1, si111_temp, FP2)
     Sample(1, surf_temp_mV, FP2)
-
-    ' Hydraprobes
-    Sample(9, vwc, FP2)
 
     ' Wind Monitor
     Sample(1, ws, FP2)
@@ -361,7 +364,28 @@ DataTable(SlowRawData, TRUE, -1)
     Sample(1, ppfd, FP2)
 
     ' Soil Heat Flux
-    Sample(NUM_HFP01, G_1, FP2)
+    Sample(NUM_HFP, G, FP2)
+    FieldNames("G_A_5cm,G_B_5cm,G_C_5cm")
+
+    ' Hydraprobes
+    Sample(NUM_HYDRA, vwc, FP2)
+    FieldNames("vwc_A_5cm,vwc_A_10cm,vwc_A_15cm,vwc_A_30cm,vwc_A_50cm,vwc_B_5cm,vwc_B_10cm,vwc_B_15cm,vwc_B_30cm,vwc_B_50cm,vwc_C_5cm,vwc_C_10cm,vwc_C_15cm,vwc_C_30cm,vwc_C_50cm")
+    Sample(NUM_HYDRA, soil_cond, FP2)
+    FieldNames("soil_cond_A_5cm,soil_cond_A_10cm,soil_cond_A_15cm,soil_cond_A_30cm,soil_cond_A_50cm,soil_cond_B_5cm,soil_cond_B_10cm,soil_cond_B_15cm,soil_cond_B_30cm,soil_cond_B_50cm,soil_cond_C_5cm,soil_cond_C_10cm,soil_cond_C_15cm,soil_cond_C_30cm,soil_cond_C_50cm")
+    Sample(NUM_HYDRA, soil_temp, FP2)
+    FieldNames("soil_temp_A_5cm,soil_temp_A_10cm,soil_temp_A_15cm,soil_temp_A_30cm,soil_temp_A_50cm,soil_temp_B_5cm,soil_temp_B_10cm,soil_temp_B_15cm,soil_temp_B_30cm,soil_temp_B_50cm,soil_temp_C_5cm,soil_temp_C_10cm,soil_temp_C_15cm,soil_temp_C_30cm,soil_temp_C_50cm")
+    Sample(NUM_HYDRA, soil_temp_F, FP2)
+    FieldNames("soil_temp_F_A_5cm,soil_temp_F_A_10cm,soil_temp_F_A_15cm,soil_temp_F_A_30cm,soil_temp_F_A_50cm,soil_temp_F_B_5cm,soil_temp_F_B_10cm,soil_temp_F_B_15cm,soil_temp_F_B_30cm,soil_temp_F_B_50cm,soil_temp_F_C_5cm,soil_temp_F_C_10cm,soil_temp_F_C_15cm,soil_temp_F_C_30cm,soil_temp_F_C_50cm")
+    Sample(NUM_HYDRA, uncorr_soil_cond, FP2)
+    FieldNames("uncorr_soil_cond_A_5cm,uncorr_soil_cond_A_10cm,uncorr_soil_cond_A_15cm,uncorr_soil_cond_A_30cm,uncorr_soil_cond_A_50cm,uncorr_soil_cond_B_5cm,uncorr_soil_cond_B_10cm,uncorr_soil_cond_B_15cm,uncorr_soil_cond_B_30cm,uncorr_soil_cond_B_50cm,uncorr_soil_cond_C_5cm,uncorr_soil_cond_C_10cm,uncorr_soil_cond_C_15cm,uncorr_soil_cond_C_30cm,uncorr_soil_cond_C_50cm")
+    Sample(NUM_HYDRA, uncorr_r_eps, FP2)
+    FieldNames("uncorr_r_eps_A_5cm,uncorr_r_eps_A_10cm,uncorr_r_eps_A_15cm,uncorr_r_eps_A_30cm,uncorr_r_eps_A_50cm,uncorr_r_eps_B_5cm,uncorr_r_eps_B_10cm,uncorr_r_eps_B_15cm,uncorr_r_eps_B_30cm,uncorr_r_eps_B_50cm,uncorr_r_eps_C_5cm,uncorr_r_eps_C_10cm,uncorr_r_eps_C_15cm,uncorr_r_eps_C_30cm,uncorr_r_eps_C_50cm")
+    Sample(NUM_HYDRA, uncorr_i_eps, FP2)
+    FieldNames("uncorr_i_eps_A_5cm,uncorr_i_eps_A_10cm,uncorr_i_eps_A_15cm,uncorr_i_eps_A_30cm,uncorr_i_eps_A_50cm,uncorr_i_eps_B_5cm,uncorr_i_eps_B_10cm,uncorr_i_eps_B_15cm,uncorr_i_eps_B_30cm,uncorr_i_eps_B_50cm,uncorr_i_eps_C_5cm,uncorr_i_eps_C_10cm,uncorr_i_eps_C_15cm,uncorr_i_eps_C_30cm,uncorr_i_eps_C_50cm")
+    Sample(NUM_HYDRA, r_eps, FP2)
+    FieldNames("r_eps_A_5cm,r_eps_A_10cm,r_eps_A_15cm,r_eps_A_30cm,r_eps_A_50cm,r_eps_B_5cm,r_eps_B_10cm,r_eps_B_15cm,r_eps_B_30cm,r_eps_B_50cm,r_eps_C_5cm,r_eps_C_10cm,r_eps_C_15cm,r_eps_C_30cm,r_eps_C_50cm")
+    Sample(NUM_HYDRA, i_eps, FP2)
+    FieldNames("i_eps_A_5cm,i_eps_A_10cm,i_eps_A_15cm,i_eps_A_30cm,i_eps_A_50cm,i_eps_B_5cm,i_eps_B_10cm,i_eps_B_15cm,i_eps_B_30cm,i_eps_B_50cm,i_eps_C_5cm,i_eps_C_10cm,i_eps_C_15cm,i_eps_C_30cm,i_eps_C_50cm")
 
 EndTable
 
@@ -393,7 +417,7 @@ BeginProg
 SlowSequence
     Scan(SLOW_INTV, Sec, 7, 0)
         PanelTemp(panel_temp, 60)
-        Battery(battery)
+        Battery(batt)
 
         ' CNR4
         VoltDiff(cnr4_mV, 4,mV200C, CHAN_DIFF_CNR4, True, 0, 60, 1, 0)
@@ -409,10 +433,12 @@ SlowSequence
         lw_out = (lw_out_mV * LW_LOWER_MULT) + (5.67e-8 * (cnr4_temp_k^4))
 
         ' BaroVUE and HygroVUE 10 press, temp, rh, dp, vp
-        SDI12Recorder(bv10, CHAN_C_BV10, ADR_SDI12_BV10, CMD_SDI12_BV10, 1, 0.0, -1, 1)
-        SDI12Recorder(hv10, CHAN_C_HV10, ADR_SDI12_HV10, CMD_SDI12_HV10, 1, 0.0, -1, 1)
+        SDI12Recorder(bv10, CHAN_C_BV10, ADR_SDI12_BV10, CMD_SDI12_BV10, 1, 0.0, -1)
+        SDI12Recorder(hv10, CHAN_C_HV10, ADR_SDI12_HV10, CMD_SDI12_HV10, 1, 0.0, -1)
         hv10_diag = temp
-        If temp = -99.99 OR temp = -9999 or rh = 0 Then temp = NAN : rh = NAN : dew_point = NAN : vapor_press = NAN
+        If temp = -99.99 OR temp = -9999 OR rh = 0 Then temp = NAN : rh = NAN : dew_point = NAN : vapor_press = NAN
+        sat_vapor_press = vapor_press/(rh/100)
+        vpd = sat_vapor_press - vapor_press
 
         ' SI-111 SS
         Therm109(si111_temp, 1, CHAN_SE_SI111, CHAN_EX_SI111, 0, 60, 1.0, 0.0)
@@ -423,15 +449,27 @@ SlowSequence
         surf_temp = SQR(SQR(m*surf_temp_mV + b + (si111_temp + 273.15)^4)) - 273.15
 
         ' Hydraprobes
-        ' returns 9 measurements: HJFGOKMLN
-        ' Ask for help from campbell on WTF the waitontimeout command means
-        SDI12Recorder(hydra, CHAN_C_HYDRA, ADR_SDI12_HYDRA, CMD_SDI12_HYDRA, 1.0, 0.0, -1)
+        'SDI12Recorder(hydra, CHAN_C_HYDRA, ADR_SDI12_HYDRA, CMD_SDI12_HYDRA, 1.0, 0.0, -1,1)
+        Dim i
+        For i=1 To NUM_HYDRA
+          Move(hydra, 9, NaN,1)
+          SDI12Recorder(hydra, CHAN_C_HYDRA, Mid(ADR_SDI12_HYDRA, i, 1), CMD_SDI12_HYDRA, 1.0, 0.0, -1)
+          Move(vwc(i), 1, hydra(1), 1)
+          Move(soil_cond(i), 1, hydra(2), 1)
+          Move(soil_temp(i), 1, hydra(3), 1)
+          Move(soil_temp_F(i), 1, hydra(4), 1)
+          Move(uncorr_soil_cond(i), 1, hydra(5), 1)
+          Move(uncorr_r_eps(i), 1, hydra(6), 1)
+          Move(uncorr_i_eps(i), 1, hydra(7), 1)
+          Move(r_eps(i), 1, hydra(8), 1)
+          Move(i_eps(i), 1, hydra(9), 1)
+        Next 
 
         ' PPFD
         VoltDiff(ppfd,1, mV200C,CHAN_DIFF_PAR, TRUE ,0,60,100.0,0)
 
         ' Soil Heat Flux
-        CDM_VoltDiff(VOLT116, ADR_CPI_VOLT116, hfp, NUM_HFP01,mV200C, CHAN_DIFF_HFP01_1,True, 200, 250, HFP_MULT, 0)
+        CDM_VoltDiff(VOLT116, ADR_CPI_VOLT116, G, NUM_HFP,mV200C, CHAN_DIFF_HFP,True, 200, 250, HFP_MULT, 0)
 
         CallTable(SlowRawData)
         CallTable(SlowStatsData)
