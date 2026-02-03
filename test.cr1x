@@ -54,7 +54,7 @@ ConstTable(Const_Table)
     Const SDM_CLK_SPEED = 30  ' us
     Const ADR_SDM_EC100 = 1
     Const CHAN_C_EC100 = C1
-    Const IRGASON_N_OFFSET = 0.0  ' degrees, compass direction that the north arrow points to on the sonic. Not used.
+    Const IRGASON_N_OFFSET = 0.0  ' degrees, compass direction that sonic "faces"
 
     ' CNR4
     ' RADIOMETER WORKING, TEMPERATURE NOT WORKING
@@ -108,12 +108,12 @@ ConstTable(Const_Table)
     Const NUM_HYDRA = Len(ADR_SDI12_HYDRA)
     ' idk how many sensors yet
 
-    ' Wind Monitor
-    Const SN_RMY = 9999  ' placeholder
-    Const CHAN_P_RMY = P1
-    Const CHAN_SE_RMY = 14
-    Const CHAN_EX_RMY = Vx2
-    Const RMY_N_OFFSET = 0.0  ' compass direction that the north arrow points to on the wind meter. Should be 0.0 if mounted properly
+    ' ' Wind Monitor
+    ' Const SN_RMY = 9999  ' placeholder
+    ' Const CHAN_P_RMY = P1
+    ' Const CHAN_SE_RMY = 14
+    ' Const CHAN_EX_RMY = Vx2
+    ' Const RMY_N_OFFSET = 0.0  ' compass direction that the north arrow points to on the wind meter. Should be 0.0 if mounted properly
 
     ' PAR
     ' WORKS
@@ -151,6 +151,9 @@ Alias irgason(9) = irgason_temp: Units irgason_temp = degC
 Alias irgason(10) = irgason_press: Units irgason_press = kPa
 Alias irgason(11) = co2_signal: Units co2_signal = unitless
 Alias irgason(12) = h2o_signal: Units h2o_signal = unitless
+Public irgason_ws: Units irgason_ws = m s-1
+Public irgason_wd: Units irgason_wd = deg
+
 SDMBeginPort(CHAN_C_EC100)
 
 ' ' Data to be computed
@@ -225,10 +228,10 @@ Public uncorr_i_eps(NUM_HYDRA): Units uncorr_i_eps = unitless
 Public r_eps(NUM_HYDRA): Units r_eps = unitless
 Public i_eps(NUM_HYDRA):  Units i_eps = unitless
 
-' RMY Wind Monitor
-' =================
-Public ws : Units ws = m s-1
-Public wd : Units wd = deg
+' ' RMY Wind Monitor
+' ' =================
+' Public ws : Units ws = m s-1
+' Public wd : Units wd = deg
 
 ' PAR Sensor
 ' ===========
@@ -237,9 +240,6 @@ Public ppfd : Units ppfd = umol m-2 s-1
 ' HFP01 Soil Heat Flux Plates
 ' ===========================
 Public G(NUM_HFP): Units G = W m-2
-'Alias hfp(1) = G_1: Units G_1 = W m-2
-'Alias hfp(2) = G_2: Units G_2 = W m-2
-'Alias hfp(3) = G_3: Units G_3 = W m-2
 
 
 DataTable(FastData, TRUE, -1)
@@ -280,6 +280,9 @@ DataTable(SlowStatsData, TRUE, STATS_TABLE_SIZE)
     Average(1, irgason_press, IEEE4, FALSE)
     Totalize(1, disable_sonic, UINT2, FALSE)
     Totalize(1, disable_irga, UINT2, FALSE)
+    Average(1, irgason_ws, IEEE4, disable_sonic)
+    WindVector(1, irgason_ws, irgason_wd, IEEE4, disable_sonic, 0, 0, 3)
+    FieldNames("irgason_wd_Avg")
 
     ' CNR4 sw/lw in/out
     Average(4, sw_in, IEEE4, FALSE)
@@ -297,10 +300,10 @@ DataTable(SlowStatsData, TRUE, STATS_TABLE_SIZE)
     Average(1, si111_temp, IEEE4, FALSE)
     Average(1, surf_temp, IEEE4, FALSE)
     
-    ' Wind Monitor
-    Average(1, ws, IEEE4, FALSE)
-    WindVector(1, ws, wd, IEEE4, FALSE, 0, 0, 3)
-    FieldNames("wd_Avg")
+    ' ' Wind Monitor
+    ' Average(1, ws, IEEE4, FALSE)
+    ' WindVector(1, ws, wd, IEEE4, FALSE, 0, 0, 3)
+    ' FieldNames("wd_Avg")
     
     ' PPFD
     Average(1, ppfd, IEEE4, FALSE)
@@ -337,6 +340,8 @@ DataTable(SlowRawData, TRUE, -1)
     Sample(1, irgason_press, IEEE4)
     Sample(1, disable_sonic, UINT2)
     Sample(1, disable_irga, UINT2)
+    Sample(1, irgason_ws, FP2)
+    Sample(1, irgason_wd, FP2)
 
     ' cnr4 sw/lw in/out
     Sample(4, sw_in, FP2)
@@ -356,9 +361,9 @@ DataTable(SlowRawData, TRUE, -1)
     Sample(1, si111_temp, FP2)
     Sample(1, surf_temp_mV, FP2)
 
-    ' Wind Monitor
-    Sample(1, ws, FP2)
-    Sample(1, wd, FP2)
+    ' ' Wind Monitor
+    ' Sample(1, ws, FP2)
+    ' Sample(1, wd, FP2)
 
     ' PPFD
     Sample(1, ppfd, FP2)
@@ -404,12 +409,16 @@ BeginProg
         If disable_sonic Then ux = NAN : uy = NAN : uz = NAN : sonic_temp = NAN
         If disable_irga Then rho_co2 = NAN : rho_h2o = NAN
         
-        ' Wind Monitor
-        PulseCount(ws, 1, CHAN_P_RMY, 5, 1, 0.098, 0)
-        BrHalf(wd, 1, mV5000, CHAN_SE_RMY, CHAN_EX_RMY, 1, 2500, TRUE,0,15000, 355, 0)
-        If wd >= 360 OR wd < 0 Then wd = NAN  ' bad values
-        wd += RMY_N_OFFSET  ' apply north offset
-        If wd >= 360 Then wd -= 360  ' wrap around to ensure 0 <= wd < 360
+        ' WS and direction from sonic in meteorological convention (source degrees CW from north)
+        irgason_ws = SQR(ux^2 + uy^2)
+        irgason_wd = (-ATN2(-uy, -ux)*180.0/3.14159265 - N_OFFSET) MOD 360.0
+
+        ' ' RMY Wind Monitor (not used)
+        ' PulseCount(ws, 1, CHAN_P_RMY, 5, 1, 0.098, 0)
+        ' BrHalf(wd, 1, mV5000, CHAN_SE_RMY, CHAN_EX_RMY, 1, 2500, TRUE,0,15000, 355, 0)
+        ' If wd >= 360 OR wd < 0 Then wd = NAN  ' bad values
+        ' wd += RMY_N_OFFSET  ' apply north offset
+        ' If wd >= 360 Then wd -= 360  ' wrap around to ensure 0 <= wd < 360
 
         CallTable FastData
     NextScan
