@@ -411,7 +411,7 @@ BeginProg
         
         ' WS and direction from sonic in meteorological convention (source degrees CW from north)
         irgason_ws = SQR(ux^2 + uy^2)
-        irgason_wd = (-ATN2(-uy, -ux)*180.0/3.14159265 - N_OFFSET) MOD 360.0
+        irgason_wd = (-ATN2(-uy, -ux)*180.0/3.14159265 - IRGASON_N_OFFSET) MOD 360.0
 
         ' ' RMY Wind Monitor (not used)
         ' PulseCount(ws, 1, CHAN_P_RMY, 5, 1, 0.098, 0)
