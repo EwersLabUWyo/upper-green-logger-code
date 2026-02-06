@@ -153,6 +153,39 @@ Alias irgason(11) = co2_signal: Units co2_signal = unitless
 Alias irgason(12) = h2o_signal: Units h2o_signal = unitless
 Public irgason_ws: Units irgason_ws = m s-1
 Public irgason_wd: Units irgason_wd = deg
+Public sonic_flags(6) As Boolean
+Alias sonic_flags(1) = sonic_low_amp_flag
+Alias sonic_flags(2) = sonic_high_amp_flag
+Alias sonic_flags(3) = sonic_tracking_flag
+Alias sonic_flags(4) = sonic_hi_3_axis_dc_flag
+Alias sonic_flags(5) = sonic_acquiring_flag
+Alias sonic_flags(6) = sonic_cal_mem_err_flag
+
+Public irga_flags(23) As Boolean
+Alias irga_flags(1) = irga_bad_data_flag
+Alias irga_flags(2) = irga_sys_fault_flag
+Alias irga_flags(3) = irga_sys_startup_flag
+Alias irga_flags(4) = irga_motor_speed_flag
+Alias irga_flags(5) = irga_tec_temp_flag
+Alias irga_flags(6) = irga_light_power_flag
+Alias irga_flags(7) = irga_light_temp_flag
+Alias irga_flags(8) = irga_light_i_flag
+Alias irga_flags(9) = irga_power_off_flag
+Alias irga_flags(10) = irga_chan_err_flag
+Alias irga_flags(11) = irga_amb_temp_flag
+Alias irga_flags(12) = irga_amb_press_flag
+Alias irga_flags(13) = irga_co2i_flag
+Alias irga_flags(14) = irga_co2io_flag
+Alias irga_flags(15) = irga_h2oi_flag
+Alias irga_flags(16) = irga_h2o_io_flag
+Alias irga_flags(17) = irga_co2iovar_flag
+Alias irga_flags(18) = irga_h2oiovar_flag
+Alias irga_flags(19) = irga_co2ioratio_flag
+Alias irga_flags(20) = irga_h2oioratio_flag
+Alias irga_flags(21) = irga_cal_mem_err_flag
+Alias irga_flags(22) = irga_heater_ctrl_flag
+Alias irga_flags(23) = irga_diff_press_flag
+
 
 SDMBeginPort(CHAN_C_EC100)
 
@@ -397,6 +430,8 @@ EndTable
 '====================================
 ' Main Program
 '====================================
+Dim i
+Dim j
 BeginProg
     SDMSpeed(SDM_CLK_SPEED)
     Scan(FAST_INTV, mSec, FAST_SCAN_BUFFER_SIZE, 0)
@@ -419,6 +454,16 @@ BeginProg
         ' If wd >= 360 OR wd < 0 Then wd = NAN  ' bad values
         ' wd += RMY_N_OFFSET  ' apply north offset
         ' If wd >= 360 Then wd -= 360  ' wrap around to ensure 0 <= wd < 360
+
+        ' pull out specific diagnostic flags from the irgason diag words
+        For j = 1 To 6
+            sonic_flags(j) = (sonic_diag AND 2^(j-1)) > 0
+            irga_flags(j) = (irga_diag AND 2^(j-1)) > 0
+        Next
+        For j = 7 To 23
+            irga_flags(j) = (irga_diag AND 2^(j-1)) > 0
+        Next
+
 
         CallTable FastData
     NextScan
@@ -459,7 +504,6 @@ SlowSequence
 
         ' Hydraprobes
         'SDI12Recorder(hydra, CHAN_C_HYDRA, ADR_SDI12_HYDRA, CMD_SDI12_HYDRA, 1.0, 0.0, -1,1)
-        Dim i
         For i=1 To NUM_HYDRA
           Move(hydra, 9, NaN,1)
           SDI12Recorder(hydra, CHAN_C_HYDRA, Mid(ADR_SDI12_HYDRA, i, 1), CMD_SDI12_HYDRA, 1.0, 0.0, -1)
