@@ -34,7 +34,7 @@ PreserveVariables
 ' User defined constants, can be modified on the logger easily
 ConstTable(Const_Table)
     ' Program function constants
-    Const FAST_INTV = 50  ' ms, scan interval for high frequency instruments
+    Const FAST_INTV = 500  ' ms, scan interval for high frequency instruments
     Const FAST_FREQ = 1000 INTDV FAST_INTV  ' Hz, frequency for high frequency instruments
     Const FAST_SCAN_BUFFER_SIZE = 60 * (1000 INTDV FAST_INTV)  ' 60 second scan buffer
     Const NDAYS_FAST_CRD = 1  ' Number of days to store in the fast data CRD file
@@ -91,9 +91,9 @@ ConstTable(Const_Table)
 
     ' SI-111 SS
     Const SN_SI111 = 9999  ' placeholder
-    Const CHAN_SE_SI111 = 12
-    Const CHAN_EX_SI111 = Vx3
-    Const CHAN_DIFF_SI111 = 5
+    Const CHAN_SE_SI111 = 12  ' Green
+    Const CHAN_EX_SI111 = Vx3  ' Red
+    Const CHAN_DIFF_SI111 = 5  ' White + / Black - / Blue + Clear AG
     Const m2 = 91266.1
     Const m1 = 10507600.0
     Const m0 = 1641750000.0
@@ -102,7 +102,9 @@ ConstTable(Const_Table)
     Const b0 = -8708830.0
 
     ' Hydraprobes
+    ' Red +12V / Black G / Blue Data
     Const CMD_SDI12_HYDRA = "M!"
+    Const CHAN_SW12_HYDRA = SW12_1
     Const CHAN_C_HYDRA = C7
     Const ADR_SDI12_HYDRA = "0123456789ABCDE"
     Const NUM_HYDRA = Len(ADR_SDI12_HYDRA)
@@ -153,6 +155,7 @@ Alias irgason(11) = co2_signal: Units co2_signal = unitless
 Alias irgason(12) = h2o_signal: Units h2o_signal = unitless
 Public irgason_ws: Units irgason_ws = m s-1
 Public irgason_wd: Units irgason_wd = deg
+
 Public sonic_flags(6) As Boolean
 Alias sonic_flags(1) = sonic_low_amp_flag
 Alias sonic_flags(2) = sonic_high_amp_flag
@@ -437,12 +440,25 @@ BeginProg
     Scan(FAST_INTV, mSec, FAST_SCAN_BUFFER_SIZE, 0)
         EC100(irgason, ADR_SDM_EC100, 1)
         
+        ' Pull out diagnostic bits for in-the-field troubleshooting
+        For j = 1 To 6
+            sonic_flags(j) = (sonic_diag AND 2^(j-1)) > 0
+            irga_flags(j) = (irga_diag AND 2^(j-1)) > 0
+        Next
+        For j = 7 To 23
+            irga_flags(j) = (irga_diag AND 2^(j-1)) > 0
+        Next
+
+        ' NOTE: ask campbell if amb temp/press directly affec the irgason measurements?
         disable_sonic = FALSE
         disable_irga = FALSE
         disable_sonic = (sonic_diag <> 0)
         disable_irga = (irga_diag <> 0)
         If disable_sonic Then ux = NAN : uy = NAN : uz = NAN : sonic_temp = NAN
         If disable_irga Then rho_co2 = NAN : rho_h2o = NAN
+        If irga_amb_temp_flag Then irgason_temp = NAN
+        If irga_amb_press_flag Then irgason_press = NAN
+        
         
         ' WS and direction from sonic in meteorological convention (source degrees CW from north)
         irgason_ws = SQR(ux^2 + uy^2)
@@ -455,15 +471,6 @@ BeginProg
         ' wd += RMY_N_OFFSET  ' apply north offset
         ' If wd >= 360 Then wd -= 360  ' wrap around to ensure 0 <= wd < 360
 
-        ' pull out specific diagnostic flags from the irgason diag words
-        For j = 1 To 6
-            sonic_flags(j) = (sonic_diag AND 2^(j-1)) > 0
-            irga_flags(j) = (irga_diag AND 2^(j-1)) > 0
-        Next
-        For j = 7 To 23
-            irga_flags(j) = (irga_diag AND 2^(j-1)) > 0
-        Next
-
 
         CallTable FastData
     NextScan
@@ -472,6 +479,9 @@ SlowSequence
     Scan(SLOW_INTV, Sec, 7, 0)
         PanelTemp(panel_temp, 60)
         Battery(batt)
+           
+        ' Turn on power to certain ancillary sensors only if power is sufficient
+        If batt > 11.5 Then SW12(CHAN_SW12_HYDRA, 1, 1) Else SW12(CHAN_SW12_HYDRA, 0, 1)
 
         ' CNR4
         VoltDiff(cnr4_mV, 4,mV200C, CHAN_DIFF_CNR4, True, 0, 60, 1, 0)
